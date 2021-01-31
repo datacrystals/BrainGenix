@@ -1,0 +1,21 @@
+{# USES_VARIABLES { N } #}
+{% extends 'common_group.py_' %}
+
+{% block maincode %}
+# scalar code
+_vectorisation_idx = 1
+{{scalar_code|autoindent}}
+
+# vector code
+_idx = LazyArange(N)
+_vectorisation_idx = _idx
+
+{{vector_code|autoindent}}
+
+if _cond is True:
+    _cond = slice(None)
+if _cond is False:
+    _cond = []
+
+_return_values = _numpy.array(_idx[_cond])
+{% endblock %}

@@ -1,0 +1,14 @@
+{# ITERATE_ALL { _idx } #}
+{# USES_VARIABLES { N } #}
+{# ALLOWS_SCALAR_WRITE #}
+{% extends 'common_group.py_' %}
+
+{% block maincode %}
+# scalar code
+_vectorisation_idx = 1
+{{scalar_code|autoindent}}
+
+# vector code
+_vectorisation_idx = LazyArange(N)
+{{vector_code|autoindent}}
+{% endblock %}

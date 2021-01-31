@@ -1,0 +1,15 @@
+{# USES_VARIABLES { _group_idx, N } #}
+{# ITERATE_ALL { _target_idx } #}
+{% extends 'common_group.py_' %}
+
+{% block maincode %}
+# scalar code
+_vectorisation_idx = 1
+{{scalar_code|autoindent}}
+
+# vector code
+_idx = {{_group_idx}}
+_target_idx = slice(None)
+_vectorisation_idx = _idx
+{{vector_code|autoindent}}
+{% endblock %}

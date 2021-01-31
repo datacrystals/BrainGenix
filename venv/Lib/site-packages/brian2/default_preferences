@@ -1,0 +1,385 @@
+#-------------------------------------------------------------------------------
+# Logging system preferences
+#-------------------------------------------------------------------------------
+
+[logging]
+
+# What log level to use for the log written to the console.
+# 
+# Has to be one of CRITICAL, ERROR, WARNING, INFO, DEBUG or DIAGNOSTIC.
+
+console_log_level = 'INFO'
+
+# Whether to delete the log and script file on exit.
+# 
+# If set to ``True`` (the default), log files (and the copy of the main
+# script) will be deleted after the brian process has exited, unless an
+# uncaught exception occurred. If set to ``False``, all log files will be
+# kept.
+
+delete_log_on_exit = True
+
+# Whether to display a text for uncaught errors, mentioning the location
+# of the log file, the mailing list and the github issues.
+# 
+# Defaults to ``True``.
+
+display_brian_error_message = True
+
+# Whether to log to a file or not.
+# 
+# If set to ``True`` (the default), logging information will be written
+# to a file. The log level can be set via the `logging.file_log_level`
+# preference.
+
+file_log = True
+
+# What log level to use for the log written to the log file.
+# 
+# In case file logging is activated (see `logging.file_log`), which log
+# level should be used for logging. Has to be one of CRITICAL, ERROR,
+# WARNING, INFO, DEBUG or DIAGNOSTIC.
+
+file_log_level = 'DIAGNOSTIC'
+
+# The maximum size for the debug log before it will be rotated.
+# 
+# If set to any value ``> 0``, the debug log will be rotated once
+# this size is reached. Rotating the log means that the old debug log
+# will be moved into a file in the same directory but with suffix ``".1"``
+# and the a new log file will be created with the same pathname as the
+# original file. Only one backup is kept; if a file with suffix ``".1"``
+# already exists when rotating, it will be overwritten.
+# If set to ``0``, no log rotation will be applied.
+# The default setting rotates the log file after 10MB.
+
+file_log_max_size = 10000000
+
+# Whether to save a copy of the script that is run.
+# 
+# If set to ``True`` (the default), a copy of the currently run script
+# is saved to a temporary location. It is deleted after a successful
+# run (unless `logging.delete_log_on_exit` is ``False``) but is kept after
+# an uncaught exception occured. This can be helpful for debugging,
+# in particular when several simulations are running in parallel.
+
+save_script = True
+
+# Whether or not to redirect stdout/stderr to null at certain places.
+# 
+# This silences a lot of annoying compiler output, but will also hide
+# error messages making it harder to debug problems. You can always
+# temporarily switch it off when debugging. If
+# `logging.std_redirection_to_file` is set to ``True`` as well, then the
+# output is saved to a file and if an error occurs the name of this file
+# will be printed.
+
+std_redirection = True
+
+# Whether to redirect stdout/stderr to a file.
+# 
+# If both ``logging.std_redirection`` and this preference are set to
+# ``True``, all standard output/error (most importantly output from
+# the compiler) will be stored in files and if an error occurs the name
+# of this file will be printed. If `logging.std_redirection` is ``True``
+# and this preference is ``False``, then all standard output/error will
+# be completely suppressed, i.e. neither be displayed nor stored in a
+# file.
+# 
+# The value of this preference is ignore if `logging.std_redirection` is
+# set to ``False``.
+
+std_redirection_to_file = True
+
+#-------------------------------------------------------------------------------
+# Runtime codegen preferences (see subcategories for individual targets)
+#-------------------------------------------------------------------------------
+
+[codegen.runtime]
+
+#-------------------------------------------------------------------------------
+# Codegen generator preferences (see subcategories for individual languages)
+#-------------------------------------------------------------------------------
+
+[codegen.generators]
+
+#-------------------------------------------------------------------------------
+# C++ compilation preferences
+#-------------------------------------------------------------------------------
+
+[codegen.cpp]
+
+# Compiler to use (uses default if empty)
+# 
+# Should be gcc or msvc.
+
+compiler = ''
+
+# List of macros to define; each macro is defined using a 2-tuple,
+# where 'value' is either the string to define it to or None to
+# define it without a particular value (equivalent of "#define
+# FOO" in source or -DFOO on Unix C compiler command line).
+
+define_macros = []
+
+# Extra arguments to pass to compiler (if None, use either
+# ``extra_compile_args_gcc`` or ``extra_compile_args_msvc``).
+
+extra_compile_args = None
+
+# Extra compile arguments to pass to GCC compiler
+
+extra_compile_args_gcc = ['-w', '-O3', '-ffast-math', '-fno-finite-math-only', '-march=native', '-std=c++11']
+
+# Extra compile arguments to pass to MSVC compiler (the default
+# ``/arch:`` flag is determined based on the processor architecture)
+
+extra_compile_args_msvc = ['/Ox', '/w', '', '/MP']
+
+# Any extra platform- and compiler-specific information to use when
+# linking object files together.
+
+extra_link_args = []
+
+# A list of strings specifying header files to use when compiling the
+# code. The list might look like ["<vector>","'my_header'"]. Note that
+# the header strings need to be in a form than can be pasted at the end
+# of a #include statement in the C++ code.
+
+headers = []
+
+# Include directories to use. Note that ``$prefix/include`` will be
+# appended to the end automatically, where ``$prefix`` is Python's
+# site-specific directory prefix as returned by `sys.prefix`.
+
+include_dirs = []
+
+# List of library names (not filenames or paths) to link against.
+
+libraries = []
+
+# List of directories to search for C/C++ libraries at link time.
+# Note that ``$prefix/lib`` will be appended to the end automatically,
+# where ``$prefix`` is Python's site-specific directory prefix as returned
+# by `sys.prefix`.
+
+library_dirs = []
+
+# MSVC architecture name (or use system architectue by default).
+# 
+# Could take values such as x86, amd64, etc.
+
+msvc_architecture = ''
+
+# Location of the MSVC command line tool (or search for best by default).
+
+msvc_vars_location = ''
+
+# List of directories to search for C/C++ libraries at run time.
+
+runtime_library_dirs = []
+
+#-------------------------------------------------------------------------------
+# C++ codegen preferences
+#-------------------------------------------------------------------------------
+
+[codegen.generators.cpp]
+
+# Adds code to flush denormals to zero.
+# 
+# The code is gcc and architecture specific, so may not compile on all
+# platforms. The code, for reference is::
+# 
+#     #define CSR_FLUSH_TO_ZERO         (1 << 15)
+#     unsigned csr = __builtin_ia32_stmxcsr();
+#     csr |= CSR_FLUSH_TO_ZERO;
+#     __builtin_ia32_ldmxcsr(csr);
+#     
+# Found at `<http://stackoverflow.com/questions/2487653/avoiding-denormal-values-in-c>`_.
+
+flush_denormals = False
+
+# The keyword used for the given compiler to declare pointers as restricted.
+# 
+# This keyword is different on different compilers, the default works for
+# gcc and MSVS.
+
+restrict_keyword = '__restrict'
+
+#-------------------------------------------------------------------------------
+# Directory containing GSL code
+#-------------------------------------------------------------------------------
+
+[GSL]
+
+# Set path to directory containing GSL header files (gsl_odeiv2.h etc.)
+# If this directory is already in Python's include (e.g. because of conda installation), this path can be set to None.
+
+directory = None
+
+#-------------------------------------------------------------------------------
+# Numpy runtime codegen preferences
+#-------------------------------------------------------------------------------
+
+[codegen.runtime.numpy]
+
+# Whether to change the namespace of user-specifed functions to remove
+# units.
+
+discard_units = False
+
+#-------------------------------------------------------------------------------
+# Device preferences
+#-------------------------------------------------------------------------------
+
+[devices]
+
+#-------------------------------------------------------------------------------
+# Cython runtime codegen preferences
+#-------------------------------------------------------------------------------
+
+[codegen.runtime.cython]
+
+# Location of the cache directory for Cython files. By default,
+# will be stored in a ``brian_extensions`` subdirectory
+# where Cython inline stores its temporary files
+# (the result of ``get_cython_cache_dir()``).
+
+cache_dir = None
+
+# Whether to delete source files after compiling. The Cython
+# source files can take a significant amount of disk space, and
+# are not used anymore when the compiled library file exists.
+# They are therefore deleted by default, but keeping them around
+# can be useful for debugging.
+
+delete_source_files = True
+
+# Whether to use a lock file to prevent simultaneous write access
+# to cython .pyx and .so files.
+
+multiprocess_safe = True
+
+#-------------------------------------------------------------------------------
+# Code generation preferences
+#-------------------------------------------------------------------------------
+
+[codegen]
+
+# Whether to pull out scalar expressions out of the statements, so that
+# they are only evaluated once instead of once for every neuron/synapse/...
+# Can be switched off, e.g. because it complicates the code (and the same
+# optimisation is already performed by the compiler) or because the
+# code generation target does not deal well with it. Defaults to ``True``.
+
+loop_invariant_optimisations = True
+
+# The size of a directory (in MB) with cached code for Cython that triggers a warning.
+# Set to 0 to never get a warning.
+
+max_cache_dir_size = 1000
+
+# Default target for the evaluation of string expressions (e.g. when
+# indexing state variables). Should normally not be changed from the
+# default numpy target, because the overhead of compiling code is not
+# worth the speed gain for simple expressions.
+# 
+# Accepts the same arguments as `codegen.target`, except for ``'auto'``
+
+string_expression_target = 'numpy'
+
+# Default target for code generation.
+# 
+# Can be a string, in which case it should be one of:
+# 
+# * ``'auto'`` the default, automatically chose the best code generation
+#   target available.
+# * ``'cython'``, uses the Cython package to generate C++ code. Needs a
+#   working installation of Cython and a C++ compiler.
+# * ``'numpy'`` works on all platforms and doesn't need a C compiler but
+#   is often less efficient.
+# 
+# Or it can be a ``CodeObject`` class.
+
+target = 'auto'
+
+#-------------------------------------------------------------------------------
+# Network preferences
+#-------------------------------------------------------------------------------
+
+[core.network]
+
+# Default schedule used for networks that
+# don't specify a schedule.
+
+default_schedule = ['start', 'groups', 'thresholds', 'synapses', 'resets', 'end']
+
+#-------------------------------------------------------------------------------
+# C++ standalone preferences
+#-------------------------------------------------------------------------------
+
+[devices.cpp_standalone]
+
+# Additional flags to pass to the GNU make command on Linux/OS-X.
+# Defaults to "-j" for parallel compilation.
+
+extra_make_args_unix = ['-j']
+
+# Additional flags to pass to the nmake command on Windows. By default, no
+# additional flags are passed.
+
+extra_make_args_windows = []
+
+# DEPRECATED. Previously used to chose the strategy to parallelize the
+# solution of the three tridiagonal systems for multicompartmental
+# neurons. Now, its value is ignored.
+
+openmp_spatialneuron_strategy = None
+
+# The number of threads to use if OpenMP is turned on. By default, this value is set to 0 and the C++ code
+# is generated without any reference to OpenMP. If greater than 0, then the corresponding number of threads
+# are used to launch the simulation.
+
+openmp_threads = 0
+
+# Dictionary of environment variables and their values that will be set
+# during the execution of the standalone code.
+
+run_environment_variables = {'LD_BIND_NOW': '1'}
+
+#-------------------------------------------------------------------------------
+# Core Brian preferences
+#-------------------------------------------------------------------------------
+
+[core]
+
+# Default dtype for all arrays of scalars (state variables, weights, etc.).
+
+default_float_dtype = float64
+
+# Default dtype for all arrays of integer scalars.
+
+default_integer_dtype = int32
+
+# Whether to raise an error for outdated dependencies (``True``) or just
+# a warning (``False``).
+
+outdated_dependency_error = True
+
+#-------------------------------------------------------------------------------
+# Preferences to enable legacy behaviour
+#-------------------------------------------------------------------------------
+
+[legacy]
+
+# Whether to use the semantics for checking the refractoriness condition
+# that were in place up until (including) version 2.1.2. In that
+# implementation, refractory periods that were multiples of dt could lead
+# to a varying number of refractory timesteps due to the nature of
+# floating point comparisons). This preference is only provided for exact
+# reproducibility of previously obtained results, new simulations should
+# use the improved mechanism which uses a more robust mechanism to
+# convert refractoriness into timesteps. Defaults to ``False``.
+
+refractory_timing = False
+

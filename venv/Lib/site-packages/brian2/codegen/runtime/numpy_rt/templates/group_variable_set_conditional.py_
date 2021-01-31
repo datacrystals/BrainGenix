@@ -1,0 +1,45 @@
+{# USES_VARIABLES { N } #}
+{# ALLOWS_SCALAR_WRITE #}
+{% extends 'common_group.py_' %}
+
+{% block maincode %}
+numpy_False = _numpy.bool_(False)
+numpy_True = _numpy.bool_(True)
+
+# Phase 1: we compute the indices where the conditional setting is to
+# be applied, and to do this we want to vectorise over all the values,
+# but we don't want to do the iterate all protocol, so we explicitly
+# set the idx to be slice(None)
+# scalar code
+_vectorisation_idx = 1
+{{scalar_code['condition']|autoindent}}
+
+# vector code
+_idx = slice(None)
+_vectorisation_idx = LazyArange({{constant_or_scalar('N', variables['N'])}})
+{{vector_code['condition']|autoindent}}
+
+# Phase 2: having computed _cond, the boolean array of points where
+# the setting is to be applied, we want to vectorise over idx being
+# only these values.
+
+{# Note that we don't write to scalar variables conditionally. The scalar code
+   should therefore only include the calculation of scalar expressions
+   that are used below for writing to a vector variable. The only exception is
+   the "conditional writing" with the condition True. #}
+# scalar code
+_vectorisation_idx = 1
+{{scalar_code['statement']|autoindent}}
+
+# vector code
+if _cond is True or _cond is numpy_True:
+    _idx = slice(None)
+    _vectorisation_idx = LazyArange(N)
+elif _cond is False or _cond is numpy_False:
+    _idx = []
+    _vectorisation_idx = _numpy.array([], dtype=_numpy.int32)
+else:
+    _vectorisation_idx = _idx = _numpy.nonzero(_cond)[0]
+
+{{vector_code['statement']|autoindent}}
+{% endblock %}

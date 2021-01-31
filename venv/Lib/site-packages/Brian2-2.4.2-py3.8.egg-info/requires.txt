@@ -1,0 +1,17 @@
+numpy>=1.15
+cython>=0.29
+sympy>=1.2
+pyparsing
+jinja2>=2.7
+setuptools>=24.2
+
+[:platform_system == "Windows"]
+py-cpuinfo
+
+[docs]
+sphinx>=1.8
+ipython>=5
+
+[test]
+pytest
+pytest-xdist>=1.22.3

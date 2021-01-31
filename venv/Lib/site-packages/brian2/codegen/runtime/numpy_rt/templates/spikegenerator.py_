@@ -1,0 +1,27 @@
+{# USES_VARIABLES { _spikespace, neuron_index, _timebins, _period_bins, _lastindex, t_in_timesteps } #}
+{% extends 'common_group.py_' %}
+
+{% block maincode %}
+_the_period    = {{_period_bins}}
+_timebin       = {{t_in_timesteps}}
+_n_spikes      = 0
+
+_lastindex_before = {{_lastindex}}
+
+if _the_period > 0:
+    _timebin %= _the_period
+    # If there is a periodicity in the SpikeGenerator, we need to reset the
+    # lastindex when the period has passed
+    if _lastindex_before > 0 and {{_timebins}}[_lastindex_before - 1] >= _timebin:
+        _lastindex_before = 0
+
+_n_spikes = _numpy.searchsorted({{_timebins}}[_lastindex_before:],
+                                _timebin, side='right')
+
+{{_lastindex}} = _lastindex_before + _n_spikes
+
+_indices = {{neuron_index}}[_lastindex_before:_lastindex_before+_n_spikes]
+
+{{_spikespace}}[:_n_spikes] = _indices
+{{_spikespace}}[-1] = _n_spikes
+{% endblock %}

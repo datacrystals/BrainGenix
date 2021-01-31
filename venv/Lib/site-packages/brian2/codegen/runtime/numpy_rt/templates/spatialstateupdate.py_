@@ -1,0 +1,195 @@
+{# USES_VARIABLES { Cm, dt, v, N, Ic, Ri,
+                  _ab_star0, _ab_star1, _ab_star2, _b_plus, _b_minus,
+                  _v_star, _u_plus, _u_minus,
+                  _v_previous,
+                  _gtot_all, _I0_all, v
+                  _c,
+                  _P_diag, _P_parent, _P_children,
+                  _B, _morph_parent_i, _starts, _ends,
+                  _morph_children, _morph_children_num, _morph_idxchild,
+                  _invr0, _invrn, _invr,
+                  r_length_1, r_length_2, area} #}
+{# ITERATE_ALL { _idx } #}
+'''
+Solves the cable equation (spatial diffusion of currents).
+This is where most time-consuming time computations are done.
+'''
+{% extends 'common_group.py_' %}
+
+{# Preparation of the data structures #}
+{% block before_code %}
+# Inverse axial resistance
+{{_invr}}[1:] = 1.0/({{Ri}}*(1/{{r_length_2}}[:-1] + 1/{{r_length_1}}[1:]));
+# Cut sections
+for _first in {{_starts}}:
+    {{_invr}}[_first] = 0
+
+# Linear systems
+# The particular solution
+'''a[i,j]=ab[u+i-j,j]'''  # u is the number of upper diagonals = 1
+
+{{_ab_star0}}[1:] = {{_invr}}[1:] / {{area}}[:-1]
+{{_ab_star2}}[:-1] = {{_invr}}[1:] / {{area}}[1:]
+{{_ab_star1}}[:] = (-({{Cm}} / {{dt}}) - {{_invr}} / {{area}})
+{{_ab_star1}}[:-1] -= {{_invr}}[1:] / {{area}}[:-1]
+
+# Set the boundary conditions
+for _counter, (_first, _last) in enumerate(zip({{_starts}},
+                                               {{_ends}})):
+    _last = _last -1  # the compartment indices are in the interval [starts, ends[
+    # Inverse axial resistances at the ends: r0 and rn
+    {{_invr0}}[_counter] = _invr0 = {{r_length_1}}[_first]/{{Ri}}
+    {{_invrn}}[_counter] = _invrn = {{r_length_2}}[_last]/{{Ri}}
+    # Correction for boundary conditions
+    {{_ab_star1}}[_first] -= (_invr0 / {{area}}[_first])
+    {{_ab_star1}}[_last] -= (_invrn / {{area}}[_last])
+    # RHS for homogeneous solutions
+    {{_b_plus}}[_last] = -(_invrn / {{area}}[_last])
+    {{_b_minus}}[_first] = -(_invr0 / {{area}}[_first])
+{% endblock %}
+
+{% block maincode %}
+from numpy import pi
+from numpy import zeros
+
+# scalar code
+_vectorisation_idx = 1
+{{scalar_code|autoindent}}
+
+# vector code
+_vectorisation_idx = LazyArange(N)
+{{vector_code|autoindent}}
+
+{{_v_previous}}[:] = {{v}}
+{%if _scipy_available %}
+from scipy.linalg import solve_banded
+
+# Particular solution
+_b=-({{Cm}}/{{dt}}*{{v}})-_I0
+_ab = zeros((3,N))
+_ab[0,:] = {{_ab_star0}}
+_ab[1,:] = {{_ab_star1}} - _gtot
+_ab[2,:] = {{_ab_star2}}
+{{_v_star}}[:] = solve_banded((1,1),_ab,_b,overwrite_ab=True,overwrite_b=True)
+# Homogeneous solutions
+_b[:] = {{_b_plus}}
+_ab[0,:] = {{_ab_star0}}
+_ab[1,:] = {{_ab_star1}} - _gtot
+_ab[2,:] = {{_ab_star2}}
+{{_u_plus}}[:] = solve_banded((1,1),_ab,_b,overwrite_ab=True,overwrite_b=True)
+_b[:] = {{_b_minus}}
+_ab[0,:] = {{_ab_star0}}
+_ab[1,:] = {{_ab_star1}} - _gtot
+_ab[2,:] = {{_ab_star2}}
+{{_u_minus}}[:] = solve_banded((1,1),_ab,_b,overwrite_ab=True,overwrite_b=True)
+{% else %}
+# Pure numpy solution, very slow because it needs forward and backward passes
+# along the array that can't be vectorized
+_b = -({{Cm}} / {{dt}}*{{v}}) - _I0
+
+# Tridiagonal solving
+_forward = range(1, N)
+_backward = range(N-2, -1, -1)
+
+_bi = {{_ab_star1}} - _gtot  # main diagonal
+
+# First compartment
+{{_c}}[0] = {{_ab_star0}}[1] / _bi[0]
+{{_v_star}}[0] = _b[0] / _bi[0]
+{{_u_plus}}[0] = {{_b_plus}}[0]/_bi[0]
+{{_u_minus}}[0] = {{_b_minus}}[0]/_bi[0]
+
+# Other compartments
+{{_c}}[1:-1] = {{_ab_star0}}[2:]
+for _i in _forward:
+    _ai = {{_ab_star2}}[_i-1]  # subdiagonal
+    _m = 1.0/(_bi[_i]-_ai*{{_c}}[_i-1])
+    {{_c}}[_i] *= _m
+    {{_v_star}}[_i] = (_b[_i] - _ai*{{_v_star}}[_i-1])*_m
+    {{_u_plus}}[_i] = ({{_b_plus}}[_i] - _ai*{{_u_plus}}[_i-1])*_m
+    {{_u_minus}}[_i] = ({{_b_minus}}[_i] - _ai*{{_u_minus}}[_i-1])*_m
+
+for _i in _backward:
+    {{_v_star}}[_i] -= {{_c}}[_i]*{{_v_star}}[_i+1]
+    {{_u_plus}}[_i] -= {{_c}}[_i]*{{_u_plus}}[_i+1]
+    {{_u_minus}}[_i] -= {{_c}}[_i]*{{_u_minus}}[_i+1]
+
+{% endif %}
+
+# indexing for _P_children which contains the elements above the diagonal of the coupling matrix _P
+children_rowlength = len({{_morph_children}})//len({{_morph_children_num}})
+
+# Construct the coupling system with matrix _P in sparse form. s.t.
+# _P_diag contains the diagonal elements
+# _P_children contains the super diagonal entries
+# _P_parent contains the single sub diagonal entry for each row
+# _B contains the right hand side
+
+_P_children_2d = {{_P_children}}.reshape(-1, children_rowlength)
+
+for _i, (_i_parent, _i_childind, _first, _last, _invr0, _invrn) in enumerate(zip({{_morph_parent_i}},
+                                                                                 {{_morph_idxchild}},
+                                                                                 {{_starts}},
+                                                                                 {{_ends}},
+                                                                                 {{_invr0}},
+                                                                                 {{_invrn}})):
+    _last = _last - 1 # the compartment indices are in the interval [starts, ends[
+    # Towards parent
+    if _i == 0: # first section, sealed end
+        {{_P_diag}}[0] = {{_u_minus}}[_first] - 1
+        _P_children_2d[0, 0] = {{_u_plus}}[_first]
+
+        # RHS
+        {{_B}}[0] = -{{_v_star}}[_first]
+    else:
+        {{_P_diag}}[_i_parent] += (1 - {{_u_minus}}[_first]) * _invr0
+        _P_children_2d[_i_parent, _i_childind] = -{{_u_plus}}[_first] * _invr0
+
+        # RHS
+        {{_B}}[_i_parent] += {{_v_star}}[_first] * _invr0
+
+    # Towards children
+    {{_P_diag}}[_i+1] = (1 - {{_u_plus}}[_last]) * _invrn
+    {{_P_parent}}[_i] = -{{_u_minus}}[_last] * _invrn
+
+    # RHS
+    {{_B}}[_i+1] = {{_v_star}}[_last] * _invrn
+
+# Solve the linear system (the result will be stored in the former rhs _B in the end)
+# use efficient O(n) solution of the sparse linear system (structure-specific Gaussian elemination)
+_morph_children_2d = {{_morph_children}}.reshape(-1, children_rowlength)
+
+# part 1: lower triangularization
+
+for _i in range(len({{_B}})-1, -1, -1):
+    _num_children = {{_morph_children_num}}[_i];
+
+    for _k in range(_num_children):
+        _j = _morph_children_2d[_i, _k]  # child index
+
+        # subtracting _subfac times the j-th from the _i-th row
+        _subfac = _P_children_2d[_i, _k] / {{_P_diag}}[_j]
+
+        {{_P_diag}}[_i] = {{_P_diag}}[_i]  - _subfac * {{_P_parent}}[_j-1]
+        {{_B}}[_i] = {{_B}}[_i] - _subfac * {{_B}}[_j]
+
+# part 2: forwards substitution
+{{_B}}[0] = {{_B}}[0] / {{_P_diag}}[0]  # the first section does not have a parent
+for _i, j in enumerate({{_morph_parent_i}}):
+    {{_B}}[_i+1] -= {{_P_parent}}[_i] * {{_B}}[j]
+    {{_B}}[_i+1] /= {{_P_diag}}[_i+1]
+
+# For each section compute the final solution by linear combination of the general solution
+for _i, (_B_parent, _j_start, _j_end) in enumerate(zip({{_B}}[{{_morph_parent_i}}],
+                                                       {{_starts}},
+                                                       {{_ends}})):
+    _B_current = {{_B}}[_i+1]
+    if _j_start == _j_end:
+        {{v}}[_j_start] = ({{_v_star}}[_j_start] + _B_parent * {{_u_minus}}[_j_start]
+                     + _B_current * {{_u_plus}}[_j_start])
+    else:
+        {{v}}[_j_start:_j_end] = ({{_v_star}}[_j_start:_j_end] + _B_parent * {{_u_minus}}[_j_start:_j_end]
+                     + _B_current * {{_u_plus}}[_j_start:_j_end])
+
+{{Ic}}[:] = {{Cm}}*({{v}} - {{_v_previous}})/{{dt}}
+{% endblock %}

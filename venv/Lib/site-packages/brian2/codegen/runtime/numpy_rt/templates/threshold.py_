@@ -1,0 +1,42 @@
+{# USES_VARIABLES { N } #}
+{# ITERATE_ALL { _idx } #}
+{# t, not_refractory and lastspike are added as needed_variables in the
+  Thresholder class, we cannot use the USES_VARIABLE mechanism
+  conditionally
+  Same goes for "eventspace" (e.g. spikespace) which depends on the type of
+  event #}
+{% extends 'common_group.py_' %}
+
+{% block addcode %}
+{% endblock %}
+
+{% block maincode %}
+numpy_True = _numpy.bool_(True)
+numpy_False = _numpy.bool_(False)
+
+# scalar code
+_vectorisation_idx = 1
+{{scalar_code|autoindent}}
+
+# vector code
+_vectorisation_idx = LazyArange(N)
+
+{{vector_code|autoindent}}
+if _cond is True or _cond is numpy_True:
+    _events = _numpy.arange(N)
+elif _cond is False or _cond is numpy_False:
+    _events = _numpy.array([])
+else:
+    _events, = _cond.nonzero()
+
+{#  Get the name of the array that stores these events (e.g. the spikespace array) #}
+{% set _eventspace = get_array_name(eventspace_variable) %}
+
+{{_eventspace}}[-1] = len(_events)
+{{_eventspace}}[:len(_events)] = _events
+{% if _uses_refractory %}
+# Set the neuron to refractory
+{{not_refractory}}[_events] = False
+{{lastspike}}[_events] = {{t}}
+{% endif %}
+{% endblock %}
